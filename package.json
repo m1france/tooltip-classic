@@ -1,0 +1,10 @@
+{
+  "name": "tooltip-classic",
+  "version": "2.1.0",
+  "private": true,
+  "license": "MIT",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "node --test tests/*.test.cjs"
+  }
+}

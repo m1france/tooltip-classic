@@ -1,0 +1,156 @@
+[data-tooltip-classic-style="dotted"],
+[data-tooltip-classic-default="dotted"] .tooltip-classic-trigger:not([data-tooltip-classic-style]) {
+  --tc-word-decoration: underline;
+}
+
+[data-tooltip-classic-style="highlight"],
+[data-tooltip-classic-default="highlight"] .tooltip-classic-trigger:not([data-tooltip-classic-style]) {
+  --tc-highlight-fill: var(--tc-highlight-color, var(--text-highlight-bg));
+}
+
+[data-tooltip-classic-style="bubble"],
+[data-tooltip-classic-default="bubble"] .tooltip-classic-trigger:not([data-tooltip-classic-style]) {
+  --tc-bubble-display: flex;
+}
+
+[data-tooltip-classic-style="info"],
+[data-tooltip-classic-default="info"] .tooltip-classic-trigger:not([data-tooltip-classic-style]) {
+  --tc-info-display: flex;
+}
+
+:is([data-tooltip-classic-style="bubble"], [data-tooltip-classic-style="info"]),
+:is([data-tooltip-classic-default="bubble"], [data-tooltip-classic-default="info"]) .tooltip-classic-trigger:not([data-tooltip-classic-style]) {
+  --tc-icon-display: inline-flex;
+  --tc-word-cursor: inherit;
+  --tc-word-outline: 0px;
+}
+
+.tooltip-classic-word {
+  color: var(--tc-word-color, inherit);
+  cursor: var(--tc-word-cursor, help);
+  text-decoration-line: var(--tc-word-decoration, none);
+  text-decoration-style: dotted;
+  text-decoration-thickness: var(--tc-dot-size, 2px);
+  text-decoration-color: var(--tc-dot-color, var(--text-muted));
+  text-underline-offset: var(--tc-dot-offset, 4px);
+  text-decoration-skip-ink: none;
+  background-color: var(--tc-highlight-fill, transparent);
+  border-radius: .16em;
+}
+
+.tooltip-classic-icon {
+  display: var(--tc-icon-display, none);
+  align-items: center;
+  justify-content: center;
+  width: calc(var(--tc-icon-size, 13px) + 4px);
+  height: calc(var(--tc-icon-size, 13px) + 4px);
+  margin-inline-start: .14em;
+  color: var(--tc-icon-color, var(--text-muted));
+  cursor: help;
+  vertical-align: -.22em;
+  transform: translateY(-.32em);
+}
+
+.tooltip-classic-glyph-bubble {
+  display: var(--tc-bubble-display, none);
+}
+
+.tooltip-classic-glyph-info {
+  display: var(--tc-info-display, none);
+}
+
+.tooltip-classic-middle .tooltip-classic-icon {
+  transform: none;
+}
+
+.tooltip-classic-icon svg {
+  width: var(--tc-icon-size, 13px);
+  height: var(--tc-icon-size, 13px);
+}
+
+.tooltip-classic-trigger:focus-visible {
+  outline: none;
+}
+
+.tooltip-classic-trigger:focus-visible .tooltip-classic-word,
+.tooltip-classic-trigger:focus-visible .tooltip-classic-icon {
+  outline: 2px solid var(--interactive-accent);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.tooltip-classic-trigger:focus-visible .tooltip-classic-word {
+  outline-width: var(--tc-word-outline, 2px);
+}
+
+.tooltip-classic-zone {
+  position: fixed;
+  top: var(--tc-top, 0);
+  left: var(--tc-left, 0);
+  z-index: var(--layer-popover, 300);
+  box-sizing: border-box;
+  padding: var(--tc-margin, 6px);
+  width: max-content;
+  max-width: calc(100vw - 8px);
+}
+
+.tooltip-classic-positioning {
+  visibility: hidden;
+}
+
+.tooltip-classic-box {
+  box-sizing: border-box;
+  max-width: min(var(--tc-width, 320px), 100%);
+  max-height: var(--tc-available-height, none);
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: var(--tc-padding, 10px);
+  border-radius: var(--tc-radius, 8px);
+  background: var(--tc-panel-background, var(--background-primary-alt));
+  color: var(--tc-panel-text, var(--text-normal));
+  box-shadow: 0 3px 16px var(--background-modifier-box-shadow, #0005),
+    inset 0 0 0 1px var(--tc-panel-border, var(--background-modifier-border));
+  font-family: var(--font-text);
+  font-size: var(--tc-font-size, 13px);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: auto;
+}
+
+.tooltip-classic-flat .tooltip-classic-box {
+  box-shadow: inset 0 0 0 1px var(--tc-panel-border, var(--background-modifier-border));
+}
+
+.tooltip-classic-box p {
+  margin: 0;
+}
+
+.tooltip-classic-box p + p {
+  margin-top: .55em;
+}
+
+.tooltip-classic-box.markdown-rendered a.internal-link {
+  color: var(--tc-link-color, var(--tc-panel-text, var(--link-color)));
+  cursor: pointer;
+}
+
+.tooltip-classic-box.markdown-rendered a.external-link {
+  color: var(--tc-link-color, var(--tc-panel-text, var(--link-external-color)));
+}
+
+.tooltip-classic-box mark {
+  background-color: var(--text-highlight-bg);
+  color: inherit;
+}
+
+.tooltip-classic-box code {
+  padding: .1em .25em;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--tc-panel-text, var(--code-background)) 10%,
+    var(--tc-panel-background, var(--code-background)));
+  color: var(--tc-panel-text, var(--code-normal));
+  font-family: var(--font-monospace);
+  font-size: .9em;
+}
