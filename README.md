@@ -2,7 +2,7 @@
 
 Tooltip classic is an Obsidian tooltip plugin. Add a short note, explanation, or link to a word, then hover over the word or its icon to see it in a tooltip. 100% customizable, no ads, no login, no paywall.
 
-![Tooltip classic demo](images/tooltip-classic-demo.gif)
+<img src="images/tooltip-classic-demo.gif" alt="Tooltip classic demo" width="800">
 
 ## Install
 
@@ -28,7 +28,7 @@ Open **Settings → Tooltip classic** to change the default style and colors. To
 | `{b/hello/Speech bubble}`    | Speech-bubble icon |
 | `{h/hello/Highlighted word}` | Highlight          |
 
-![Tooltip classic format examples](images/tooltip-classic-format.gif)
+<img src="images/tooltip-classic-format.gif" alt="Tooltip classic format examples" width="636">
 
 The prefix letters are optional. With the default settings, `{source/description}` displays the word with a dotted underline.
 
