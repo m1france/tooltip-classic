@@ -1,6 +1,6 @@
 # Tooltip classic
 
-Tooltip classic is an Obsidian tooltip plugin. Add a short note, explanation, or link to a word, then hover over the word or its icon to see it in a tooltip.
+Tooltip classic is an Obsidian tooltip plugin. Add a short note, explanation, or link to a word, then hover over the word or its icon to see it in a tooltip. 100% customizable, no ads, no login, no paywall.
 
 ![Tooltip styles and a popup showing Markdown formatting](images/tooltip-markdown.png)
 ![Info icon tooltip with an Obsidian note link and an external link](images/tooltip-links.png)
@@ -8,8 +8,8 @@ Tooltip classic is an Obsidian tooltip plugin. Add a short note, explanation, or
 
 ## Install
 
-1. Download the latest release and unzip the `tooltip-classic` folder into `.obsidian/plugins/` inside your vault. On a Mac, press **Command + Shift + .** in Finder to show hidden folders.
-2. In Obsidian, open **Settings → Community plugins**, reload the plugin list, and enable **Tooltip classic**.
+1. In Obsidian, open **Settings → Community plugins**, reload the plugin list, and enable **Tooltip classic**.
+2. Manual installation: Download the latest release and unzip the `tooltip-classic` folder into `.obsidian/plugins/` inside your vault. On a Mac, press **Command + Shift + .** in Finder to show hidden folders.
 
 Requires Obsidian Desktop 1.15.0 or later.
 
@@ -23,12 +23,12 @@ Write this in a note, then hover over **hello** in Reading view or Live Preview.
 
 Open **Settings → Tooltip classic** to change the default style and colors. To pick a style for just one tooltip, add a prefix.
 
-| Example | Style |
-| --- | --- |
-| `{d/hello/Dotted underline}` | Dotted underline |
-| `{t/hello/Info icon}` | Circled “i” |
-| `{b/hello/Speech bubble}` | Speech-bubble icon |
-| `{h/hello/Highlighted word}` | Highlight |
+| **Example**                  | **Style**          |
+| ---------------------------- | ------------------ |
+| `{d/hello/Dotted underline}` | Dotted underline   |
+| `{t/hello/Info icon}`        | Circled “i”        |
+| `{b/hello/Speech bubble}`    | Speech-bubble icon |
+| `{h/hello/Highlighted word}` | Highlight          |
 
 The prefix letters are optional. With the default settings, `{source/description}` displays the word with a dotted underline.
 
@@ -42,4 +42,4 @@ Move your mouse into the tooltip to select text or follow a link. Use Tab to foc
 
 ## Privacy and source
 
-The plugin saves its settings locally and includes no telemetry, ads, accounts, or payments. [MIT License](LICENSE) · [Build and release instructions](docs/RELEASING.md)
+The plugin saves its settings locally and includes no telemetry, ads, accounts, or payments. [MIT License](https://github.com/m1france/tooltip-classic/blob/main/LICENSE) · [Build and release instructions](https://github.com/m1france/tooltip-classic/blob/main/docs/RELEASING.md)
