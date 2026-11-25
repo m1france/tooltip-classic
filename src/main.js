@@ -36,8 +36,6 @@ const dimensions = {
   width: [160, 620, 320],
   padding: [4, 24, 10],
   radius: [0, 24, 8],
-  margin: [0, 12, 6],
-  delay: [100, 500, 200],
 };
 
 const geometricProperties = {
@@ -48,8 +46,10 @@ const geometricProperties = {
   width: 'width',
   padding: 'padding',
   radius: 'radius',
-  margin: 'margin',
 };
+
+const viewportEdge = 8;
+const triggerGap = 4;
 
 function normalizeSettings(data) {
   const clean = {};
@@ -132,10 +132,7 @@ class TooltipSettings extends PluginSettingTab {
         size('radius', label('Corner radius', 'Arrondi des coins')),
         row(label('Shadow', 'Ombre'), { type: 'toggle', key: 'shadow' }),
       ] },
-      { type: 'group', heading: label('Hover behavior', 'Survol'), items: [
-        size('margin', label('Pointer margin', 'Marge de survol'), 'px',
-          label('Invisible area around the tooltip that keeps it open.', 'Zone invisible autour de la bulle qui la maintient ouverte.')),
-        size('delay', label('Dismissal delay', 'Délai de fermeture'), 'ms'),
+      { type: 'group', heading: label('Reset', 'Réinitialisation'), items: [
         { name: label('Restore defaults', 'Rétablir les valeurs par défaut'), render: (setting) => {
           setting.addButton((button) => button.setButtonText(label('Restore', 'Rétablir')).onClick(async () => {
             await this.owner.applySettings({});
@@ -317,6 +314,149 @@ function livePreview(plugin) {
   }, { decorations: (view) => view.decorations });
 }
 
+function getViewportBounds(win, doc) {
+  const vv = win.visualViewport;
+  const docWidth = doc.documentElement?.clientWidth;
+  const docHeight = doc.documentElement?.clientHeight;
+  return {
+    left: vv ? vv.offsetLeft : 0,
+    top: vv ? vv.offsetTop : 0,
+    width: vv ? vv.width : (docWidth || win.innerWidth),
+    height: vv ? vv.height : (docHeight || win.innerHeight),
+  };
+}
+
+function getClipRect(element, doc, win) {
+  let left = -Infinity;
+  let top = -Infinity;
+  let right = Infinity;
+  let bottom = Infinity;
+  const clipping = /^(auto|scroll|hidden|clip)$/;
+  let current = element.parentElement;
+  while (current && current !== doc.body && current !== doc.documentElement) {
+    const style = win.getComputedStyle(current);
+    const clipX = clipping.test(style.overflowX);
+    const clipY = clipping.test(style.overflowY);
+    if (clipX || clipY) {
+      const rect = current.getBoundingClientRect();
+      if (clipX) {
+        left = Math.max(left, rect.left);
+        right = Math.min(right, rect.right);
+      }
+      if (clipY) {
+        top = Math.max(top, rect.top);
+        bottom = Math.min(bottom, rect.bottom);
+      }
+    }
+    current = current.parentElement;
+  }
+  if (left === -Infinity && top === -Infinity && right === Infinity && bottom === Infinity) return null;
+  return { left, top, right, bottom };
+}
+
+function toPlainRect(rect) {
+  return {
+    left: rect.left,
+    top: rect.top,
+    right: rect.right,
+    bottom: rect.bottom,
+    width: rect.width,
+    height: rect.height,
+  };
+}
+
+function selectAnchorRect(marker, point = null, preferredIndex = null) {
+  const rects = typeof marker.getClientRects === 'function' ? [...marker.getClientRects()].filter((r) => r.width > 0 && r.height > 0) : [];
+  if (!rects.length) return { rect: toPlainRect(marker.getBoundingClientRect()), index: null };
+  if (rects.length === 1) return { rect: toPlainRect(rects[0]), index: 0 };
+  if (point && Number.isFinite(point.x) && Number.isFinite(point.y)) {
+    const hitIndex = rects.findIndex((r) =>
+      point.x >= r.left && point.x <= r.right && point.y >= r.top && point.y <= r.bottom);
+    if (hitIndex !== -1) return { rect: toPlainRect(rects[hitIndex]), index: hitIndex };
+    let bestIndex = 0;
+    let bestDist = Infinity;
+    for (let i = 0; i < rects.length; i++) {
+      const r = rects[i];
+      const dx = point.x < r.left ? r.left - point.x : point.x > r.right ? point.x - r.right : 0;
+      const dy = point.y < r.top ? r.top - point.y : point.y > r.bottom ? point.y - r.bottom : 0;
+      const dist = dx * dx + dy * dy;
+      if (dist < bestDist) {
+        bestDist = dist;
+        bestIndex = i;
+      }
+    }
+    return { rect: toPlainRect(rects[bestIndex]), index: bestIndex };
+  }
+  const index = preferredIndex !== null && preferredIndex < rects.length ? preferredIndex : 0;
+  return { rect: toPlainRect(rects[index]), index };
+}
+
+function planTooltipConstraints({ anchorRect, naturalHeight, viewport, clipRect = null, maxWidth, edge = 8, gap = 4 }) {
+  if (!anchorRect || anchorRect.width <= 0 || anchorRect.height <= 0 || viewport.width <= 0 || viewport.height <= 0) {
+    return { visible: false, up: true, availableHeight: 0, maxWidth };
+  }
+  const vpRight = viewport.left + viewport.width;
+  const vpBottom = viewport.top + viewport.height;
+  const visLeft = clipRect ? Math.max(viewport.left, clipRect.left) : viewport.left;
+  const visRight = clipRect ? Math.min(vpRight, clipRect.right) : vpRight;
+  const visTop = clipRect ? Math.max(viewport.top, clipRect.top) : viewport.top;
+  const visBottom = clipRect ? Math.min(vpBottom, clipRect.bottom) : vpBottom;
+
+  if (anchorRect.bottom <= visTop + 1 || anchorRect.top >= visBottom - 1 ||
+      anchorRect.right <= visLeft + 1 || anchorRect.left >= visRight - 1) {
+    return { visible: false, up: true, availableHeight: 0, maxWidth };
+  }
+
+  const spaceAbove = Math.max(0, anchorRect.top - gap - (viewport.top + edge));
+  const spaceBelow = Math.max(0, (vpBottom - edge) - (anchorRect.bottom + gap));
+  const up = naturalHeight <= spaceAbove || spaceAbove >= spaceBelow;
+  return {
+    visible: true,
+    up,
+    availableHeight: Math.max(0, up ? spaceAbove : spaceBelow),
+    maxWidth,
+  };
+}
+
+function resolveTooltipPosition({ anchorRect, boxWidth, boxHeight, up, viewport, edge = 8, gap = 4 }) {
+  const minLeft = viewport.left + edge;
+  const maxLeft = Math.max(minLeft, viewport.left + viewport.width - boxWidth - edge);
+  const centeredLeft = anchorRect.left + (anchorRect.width - boxWidth) / 2;
+  const left = Math.max(minLeft, Math.min(centeredLeft, maxLeft));
+
+  const minTop = viewport.top + edge;
+  const maxTop = Math.max(minTop, viewport.top + viewport.height - boxHeight - edge);
+  const rawTop = up ? anchorRect.top - gap - boxHeight : anchorRect.bottom + gap;
+  const top = Math.max(minTop, Math.min(rawTop, maxTop));
+  return { left, top };
+}
+
+function isPointInTriangle(px, py, ax, ay, bx, by, cx, cy) {
+  const d1 = (px - bx) * (ay - by) - (ax - bx) * (py - by);
+  const d2 = (px - cx) * (by - cy) - (bx - cx) * (py - cy);
+  const d3 = (px - ax) * (cy - ay) - (cx - ax) * (py - ay);
+  const hasNeg = d1 < 0 || d2 < 0 || d3 < 0;
+  const hasPos = d1 > 0 || d2 > 0 || d3 > 0;
+  return !(hasNeg && hasPos);
+}
+
+function isPointInSafeGap({ x, y, up, anchorRect, boxRect, origin, target }) {
+  if (!Number.isFinite(x) || !Number.isFinite(y) || !anchorRect || !boxRect) return false;
+  if (up) {
+    if (y < boxRect.bottom - 1 || y >= anchorRect.top) return false;
+  } else {
+    if (y <= anchorRect.bottom || y > boxRect.top + 1) return false;
+  }
+  if (target === 'marker') {
+    return x >= anchorRect.left && x <= anchorRect.right;
+  }
+  const ox = origin && Number.isFinite(origin.x) ? origin.x : (anchorRect.left + anchorRect.right) / 2;
+  const rawOy = origin && Number.isFinite(origin.y) ? origin.y : (up ? anchorRect.top + 2 : anchorRect.bottom - 2);
+  const oy = up ? Math.max(rawOy, anchorRect.top + 2) : Math.min(rawOy, anchorRect.bottom - 2);
+  const facingY = up ? boxRect.bottom : boxRect.top;
+  return isPointInTriangle(x, y, ox, oy, boxRect.left, facingY, boxRect.right, facingY);
+}
+
 module.exports = class TooltipClassic extends Plugin {
   async onload() {
     this.settings = normalizeSettings(await this.loadData());
@@ -359,6 +499,7 @@ module.exports = class TooltipClassic extends Plugin {
     body.dataset.tooltipClassicDefault = this.settings.triggerStyle;
     body.classList.toggle('tooltip-classic-middle', this.settings.iconPosition === 'middle');
     body.classList.toggle('tooltip-classic-flat', !this.settings.shadow);
+    body.style.removeProperty('--tc-margin');
     for (const [key, property] of Object.entries(colorProperties)) {
       body.style.setProperty(`--tc-${property}`, this.settings[key]);
     }
@@ -370,6 +511,7 @@ module.exports = class TooltipClassic extends Plugin {
   clearAppearance(doc) {
     delete doc.body.dataset.tooltipClassicDefault;
     doc.body.classList.remove('tooltip-classic-middle', 'tooltip-classic-flat');
+    doc.body.style.removeProperty('--tc-margin');
     for (const property of [...Object.values(colorProperties), ...Object.values(geometricProperties)]) {
       doc.body.style.removeProperty(`--tc-${property}`);
     }
@@ -410,24 +552,39 @@ module.exports = class TooltipClassic extends Plugin {
       const effectiveStyle = style ?? this.settings.triggerStyle;
       return effectiveStyle === 'bubble' || effectiveStyle === 'info' ? icon : word;
     };
-    const open = () => this.open(anchor, marker(), path, render);
+    let lastPointerType = 'mouse';
+    anchor.addEventListener('pointerdown', (event) => {
+      lastPointerType = event.pointerType || 'mouse';
+    }, { capture: true });
+    const open = (options) => this.open(anchor, marker(), path, render, options);
     for (const target of [word, icon]) {
       target.addEventListener('pointerenter', (event) => {
-        if (event.pointerType !== 'touch' && target === marker()) open();
+        if (event.pointerType !== 'touch' && target === marker()) {
+          open({ mode: 'pointer', event });
+        }
+      });
+      target.addEventListener('pointermove', (event) => {
+        if (event.pointerType !== 'touch' && target === marker() && this.active?.anchor === anchor) {
+          this.active.trackMarkerPointer(event);
+        }
       });
     }
     anchor.addEventListener('focus', () => {
-      if (anchor.matches(':focus-visible')) open();
+      if (anchor.matches(':focus-visible')) open({ mode: 'keyboard' });
     });
     anchor.addEventListener('click', (event) => {
-      if (event.detail === 0 || marker().contains(event.target)) open();
+      if (event.detail === 0) {
+        open({ mode: 'keyboard' });
+      } else if (marker().contains(event.target)) {
+        open({ mode: lastPointerType === 'touch' ? 'touch' : 'pointer', event });
+      }
     });
     anchor.addEventListener('keydown', (event) => {
       if (!['Enter', ' ', 'ArrowDown', 'Tab'].includes(event.key) || event.shiftKey) return;
       if (event.key === 'Tab' && this.active?.anchor !== anchor) return;
       event.preventDefault();
       event.stopPropagation();
-      open();
+      open({ mode: 'keyboard' });
       if (!this.active?.ready) return;
       const { box, ready } = this.active;
       void ready.then(() => {
@@ -437,11 +594,17 @@ module.exports = class TooltipClassic extends Plugin {
     return anchor;
   }
 
-  open(anchor, marker, path, render) {
-    if (this.active?.anchor === anchor) return this.active.keep();
+  open(anchor, marker, path, render, options = {}) {
+    const mode = options.mode || 'pointer';
+    if (this.active?.anchor === anchor) {
+      if (mode === 'keyboard') this.active.setMode('keyboard');
+      else if (mode === 'touch') this.active.setMode('touch');
+      if (options.event) this.active.trackMarkerPointer(options.event);
+      return;
+    }
     this.close();
     const doc = anchor.ownerDocument;
-    const win = doc.defaultView;
+    const win = doc.defaultView || window;
     const zone = doc.createElement('div');
     zone.className = zoneClass;
     zone.classList.add('tooltip-classic-positioning');
@@ -460,68 +623,221 @@ module.exports = class TooltipClassic extends Plugin {
     component.load();
     const listeners = new win.AbortController();
     const { signal } = listeners;
-    let timer;
+
+    let keyboardActive = mode === 'keyboard';
+    let touchActive = mode === 'touch';
     let pressed = false;
-    const keep = () => window.clearTimeout(timer);
-    const schedule = () => {
-      keep();
-      timer = window.setTimeout(() => {
-        if (!pressed && !marker.matches(':hover') && !zone.matches(':hover') &&
-            !anchor.contains(doc.activeElement) && !zone.contains(doc.activeElement)) this.close();
-      }, this.settings.delay);
+    let lastPointer = options.event && Number.isFinite(options.event.clientX)
+      ? { x: options.event.clientX, y: options.event.clientY } : null;
+    let lastTriggerPoint = lastPointer;
+    let lastArea = mode === 'pointer' ? 'marker' : null;
+    let exitOrigin = null;
+    let preferredRectIndex = null;
+    let placement = null;
+
+    const inside = (node) => Boolean(node && (anchor.contains(node) || zone.contains(node)));
+    const currentAnchorRect = () => {
+      const { rect, index } = selectAnchorRect(marker, lastTriggerPoint, preferredRectIndex);
+      preferredRectIndex = index;
+      return rect;
     };
-    const inside = (node) => node && (anchor.contains(node) || zone.contains(node));
+
     const position = () => {
-      const bounds = marker.getBoundingClientRect();
-      const edge = 4;
-      const gap = 4;
-      const margin = this.settings.margin;
-      if (!anchor.isConnected || !bounds.width || bounds.bottom < edge || bounds.top > win.innerHeight - edge) {
+      if (!anchor.isConnected) {
         this.close();
         return;
       }
-      const above = bounds.top - gap - edge - margin;
-      const below = win.innerHeight - bounds.bottom - gap - edge - margin;
-      const up = box.scrollHeight <= above || above >= below;
-      box.style.setProperty('--tc-available-height', `${Math.max(0, up ? above : below)}px`);
-      const left = bounds.left + (bounds.width - zone.offsetWidth) / 2;
-      zone.style.setProperty('--tc-left', `${Math.max(edge, Math.min(left, win.innerWidth - zone.offsetWidth - edge))}px`);
-      zone.style.setProperty('--tc-top', `${up ? bounds.top - gap + margin - zone.getBoundingClientRect().height : bounds.bottom + gap - margin}px`);
+      const viewport = getViewportBounds(win, doc);
+      const clipRect = getClipRect(anchor, doc, win);
+      const anchorRect = currentAnchorRect();
+      const maxWidth = Math.max(0, Math.min(this.settings.width, viewport.width - viewportEdge * 2));
+      zone.style.setProperty('--tc-max-width', `${maxWidth}px`);
+
+      const prevScrollTop = box.scrollTop;
+      box.style.removeProperty('--tc-available-height');
+      const naturalHeight = Math.ceil(box.getBoundingClientRect().height);
+
+      const plan = planTooltipConstraints({
+        anchorRect,
+        naturalHeight,
+        viewport,
+        clipRect,
+        maxWidth,
+        edge: viewportEdge,
+        gap: triggerGap,
+      });
+      if (!plan.visible) {
+        this.close();
+        return;
+      }
+
+      box.style.setProperty('--tc-available-height', `${plan.availableHeight}px`);
+      box.scrollTop = prevScrollTop;
+
+      const boxRect = zone.getBoundingClientRect();
+      const { left, top } = resolveTooltipPosition({
+        anchorRect,
+        boxWidth: boxRect.width,
+        boxHeight: boxRect.height,
+        up: plan.up,
+        viewport,
+        edge: viewportEdge,
+        gap: triggerGap,
+      });
+      zone.style.setProperty('--tc-left', `${left}px`);
+      zone.style.setProperty('--tc-top', `${top}px`);
+
+      placement = {
+        up: plan.up,
+        anchorRect,
+        boxRect: {
+          left,
+          top,
+          right: left + boxRect.width,
+          bottom: top + boxRect.height,
+          width: boxRect.width,
+          height: boxRect.height,
+        },
+      };
     };
+
+    const trackMarkerPointer = (event) => {
+      if (!Number.isFinite(event.clientX)) return;
+      const point = { x: event.clientX, y: event.clientY };
+      lastPointer = point;
+      lastTriggerPoint = point;
+      lastArea = 'marker';
+      exitOrigin = null;
+      const { index } = selectAnchorRect(marker, point, null);
+      if (index !== null && index !== preferredRectIndex) {
+        preferredRectIndex = index;
+        position();
+      }
+    };
+
+    const canBridgeGap = (x, y, target) => {
+      if (!placement) return false;
+      return isPointInSafeGap({
+        x,
+        y,
+        up: placement.up,
+        anchorRect: placement.anchorRect,
+        boxRect: placement.boxRect,
+        origin: exitOrigin,
+        target,
+      });
+    };
+
     const resize = new win.ResizeObserver(position);
     const detach = new win.MutationObserver(() => {
       if (!anchor.isConnected) this.close();
     });
-    this.active = { anchor, box, keep, dispose: () => {
-      listeners.abort();
-      resize.disconnect();
-      detach.disconnect();
-      keep();
-      component.unload();
-      zone.remove();
-      anchor.setAttribute('aria-expanded', 'false');
-      anchor.removeAttribute('aria-controls');
-    } };
+    this.active = {
+      anchor,
+      box,
+      setMode: (nextMode) => {
+        keyboardActive = nextMode === 'keyboard';
+        touchActive = nextMode === 'touch';
+      },
+      trackMarkerPointer,
+      dispose: () => {
+        listeners.abort();
+        resize.disconnect();
+        detach.disconnect();
+        component.unload();
+        zone.remove();
+        anchor.setAttribute('aria-expanded', 'false');
+        anchor.removeAttribute('aria-controls');
+      },
+    };
 
-    for (const element of [marker, zone]) {
-      element.addEventListener('pointerenter', keep, { signal });
-      element.addEventListener('pointerleave', schedule, { signal });
-    }
-    anchor.addEventListener('focusout', schedule, { signal });
-    zone.addEventListener('focusout', schedule, { signal });
+    marker.addEventListener('pointerenter', (event) => {
+      if (event.pointerType === 'touch') return;
+      trackMarkerPointer(event);
+    }, { signal });
+    marker.addEventListener('pointerleave', (event) => {
+      if (event.pointerType === 'touch' || keyboardActive || touchActive || pressed) return;
+      if (inside(event.relatedTarget)) return;
+      exitOrigin = lastTriggerPoint || { x: event.clientX, y: event.clientY };
+      if (!canBridgeGap(event.clientX, event.clientY, 'box')) this.close();
+    }, { signal });
+
+    zone.addEventListener('pointerenter', (event) => {
+      if (event.pointerType === 'touch') return;
+      lastPointer = { x: event.clientX, y: event.clientY };
+      lastArea = 'box';
+      exitOrigin = null;
+    }, { signal });
+    zone.addEventListener('pointermove', (event) => {
+      if (event.pointerType === 'touch') return;
+      lastPointer = { x: event.clientX, y: event.clientY };
+      lastArea = 'box';
+      exitOrigin = null;
+    }, { signal });
+    zone.addEventListener('pointerleave', (event) => {
+      if (event.pointerType === 'touch' || keyboardActive || touchActive || pressed) return;
+      if (inside(event.relatedTarget)) return;
+      if (!canBridgeGap(event.clientX, event.clientY, 'marker')) this.close();
+    }, { signal });
+
+    doc.addEventListener('pointermove', (event) => {
+      if (event.pointerType === 'touch') return;
+      lastPointer = { x: event.clientX, y: event.clientY };
+      if (pressed && event.buttons === 0) pressed = false;
+      if (keyboardActive || touchActive || pressed) return;
+      if (marker.contains(event.target)) {
+        trackMarkerPointer(event);
+        return;
+      }
+      if (zone.contains(event.target)) {
+        lastArea = 'box';
+        exitOrigin = null;
+        return;
+      }
+      if (lastArea === 'marker') {
+        if (!exitOrigin) exitOrigin = lastTriggerPoint || lastPointer;
+        if (canBridgeGap(event.clientX, event.clientY, 'box')) return;
+      } else if (lastArea === 'box') {
+        if (canBridgeGap(event.clientX, event.clientY, 'marker')) return;
+      }
+      this.close();
+    }, { capture: true, passive: true, signal });
+
+    doc.documentElement.addEventListener('pointerleave', (event) => {
+      if (event.pointerType !== 'touch' && !keyboardActive && !touchActive && !pressed) this.close();
+    }, { signal });
+
+    anchor.addEventListener('focusout', (event) => {
+      if (keyboardActive && !inside(event.relatedTarget)) this.close();
+    }, { signal });
+    zone.addEventListener('focusout', (event) => {
+      if (keyboardActive && !inside(event.relatedTarget)) this.close();
+    }, { signal });
     doc.addEventListener('pointerdown', (event) => {
-      if (!inside(event.target)) this.close();
-      else pressed = zone.contains(event.target);
+      if (!inside(event.target)) {
+        this.close();
+        return;
+      }
+      if (event.pointerType !== 'touch') {
+        keyboardActive = false;
+        touchActive = false;
+      }
+      pressed = zone.contains(event.target);
     }, { capture: true, signal });
-    const release = () => {
+    const release = (event) => {
+      if (!pressed) return;
       pressed = false;
-      schedule();
+      if (keyboardActive || touchActive) return;
+      const under = Number.isFinite(event.clientX) && Number.isFinite(event.clientY)
+        ? doc.elementFromPoint(event.clientX, event.clientY)
+        : event.target;
+      if (!inside(under)) this.close();
     };
     doc.addEventListener('pointerup', release, { signal });
     doc.addEventListener('pointercancel', release, { signal });
+    win.addEventListener('dragend', release, { signal });
     doc.addEventListener('focusin', (event) => {
-      if (!inside(event.target)) schedule();
-      else keep();
+      if (keyboardActive && !inside(event.target)) this.close();
     }, { signal });
     doc.addEventListener('keydown', (event) => {
       if (event.key !== 'Escape') return;
@@ -540,9 +856,17 @@ module.exports = class TooltipClassic extends Plugin {
       if (destination) void this.app.workspace.openLinkText(destination, path, event.metaKey || event.ctrlKey);
     }, { capture: true, signal });
     doc.addEventListener('scroll', (event) => {
-      if (!inside(event.target)) position();
+      if (!inside(event.target)) {
+        position();
+        if (this.active && !keyboardActive && !touchActive && !pressed && lastPointer) {
+          const under = doc.elementFromPoint(lastPointer.x, lastPointer.y);
+          if (!inside(under)) this.close();
+        }
+      }
     }, { capture: true, passive: true, signal });
     win.addEventListener('resize', position, { signal });
+    win.visualViewport?.addEventListener('resize', position, { signal });
+    win.visualViewport?.addEventListener('scroll', position, { signal });
     win.addEventListener('blur', () => this.close(), { signal });
     resize.observe(marker);
     resize.observe(box);

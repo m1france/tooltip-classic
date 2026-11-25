@@ -89,18 +89,19 @@
   left: var(--tc-left, 0);
   z-index: var(--layer-popover, 300);
   box-sizing: border-box;
-  padding: var(--tc-margin, 6px);
   width: max-content;
-  max-width: calc(100vw - 8px);
+  max-width: var(--tc-max-width, min(var(--tc-width, 320px), calc(100vw - 16px)));
 }
 
 .tooltip-classic-positioning {
   visibility: hidden;
+  pointer-events: none;
 }
 
 .tooltip-classic-box {
   box-sizing: border-box;
-  max-width: min(var(--tc-width, 320px), 100%);
+  width: 100%;
+  max-width: 100%;
   max-height: var(--tc-available-height, none);
   overflow: auto;
   overscroll-behavior: contain;
@@ -153,4 +154,14 @@
   color: var(--tc-panel-text, var(--code-normal));
   font-family: var(--font-monospace);
   font-size: .9em;
+}
+
+.tooltip-classic-box img {
+  max-width: 100%;
+  height: auto;
+}
+
+.tooltip-classic-box pre {
+  max-width: 100%;
+  overflow-x: auto;
 }
