@@ -1,8 +1,8 @@
 {
   "id": "tooltip-classic",
   "name": "Tooltip classic",
-  "version": "2.1.0",
-  "minAppVersion": "1.15.0",
+  "version": "1.0.0",
+  "minAppVersion": "1.0.0",
   "description": "Add inline Markdown tooltips with dotted underlines, info icons, speech bubbles, or highlights.",
   "author": "Mathis",
   "isDesktopOnly": true
